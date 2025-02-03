@@ -2,19 +2,15 @@
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
-
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    hasher: usize,
+    input: String,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            hasher: 0,
+            input: "".to_owned(),
         }
     }
 }
@@ -66,44 +62,44 @@ impl eframe::App for TemplateApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
+            macro_rules! hashers {
+                ($($name:ident),*) => {
+                    const HASHES: &[(&str, fn(&[u8]) -> String)] = &[
+                        $((stringify!($name), |b| format!("0x{:X}", crate::process::hash::fnv::$name(b))),)*
+                    ];
+                };
             }
 
-            ui.separator();
+            #[rustfmt::skip]
+            hashers!(
+                fnv0_32, fnv1_32, fnv1a_32,
+                fnv0_64, fnv1_64, fnv1a_64,
+                fnv0_128, fnv1_128, fnv1a_128,
+                fnv0_256, fnv1_256, fnv1a_256,
+                fnv0_512, fnv1_512, fnv1a_512,
+                fnv0_1024, fnv1_1024, fnv1a_1024
+            );
 
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
+            egui::ComboBox::from_label("Hasher")
+                .selected_text(HASHES[self.hasher].0)
+                .show_ui(ui, |ui| {
+                    for (i, (name, _)) in HASHES.iter().enumerate() {
+                        if ui.selectable_label(self.hasher == i, *name).clicked() {
+                            self.hasher = i;
+                        }
+                    }
+                });
+
+            ui.strong("Input:");
+            ui.text_edit_singleline(&mut self.input);
+            ui.strong(format!(
+                "Output: {}",
+                HASHES[self.hasher].1(self.input.as_bytes())
             ));
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
             });
         });
     }
-}
-
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
 }
